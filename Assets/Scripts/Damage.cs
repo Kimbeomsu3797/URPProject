@@ -1,6 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Photon.Pun;
+using Photon.Realtime;
+using Player = Photon.Realtime.Player;
 
 public class Damage : MonoBehaviour
 {
@@ -14,11 +17,12 @@ public class Damage : MonoBehaviour
 
     private Animator anim;
     private CharacterController cc;
-
+    private PhotonView photonView;
     // 애니메이터 뷰에 생성한 파라미터의 해시값 추출
     private readonly int hashDie = Animator.StringToHash("Die");
     private readonly int hashRespawn = Animator.StringToHash("Respawn");
 
+    private GameManager gameManager;
     private void Awake()
     {
         // 캐릭터 모델의 모든 Renderer 컴포넌트를 추출한 후 배열에 할당
@@ -28,6 +32,8 @@ public class Damage : MonoBehaviour
 
         // 현재 생명치를 초기 생명치로 초깃값 설정
         currHp = initHp;
+
+        gameManager = GameObject.Find("GameManager").GetComponent<GameManager>();
     }
 
     private void OnCollisionEnter(Collision coll)
@@ -38,11 +44,26 @@ public class Damage : MonoBehaviour
             currHp -= 20;
             if(currHp <= 0)
             {
+                if (photonView.IsMine)
+                {
+                    //총알의 ActorNumber를 추출
+                    var actorNo = coll.collider.GetComponent<Bullet>().actorNumber;
+                    //ActorNumber로 현재 룸에 입장한 플레이어를 추출
+                    Player lastShootPlayer = PhotonNetwork.CurrentRoom.GetPlayer(actorNo);
+
+                    //메세지 출력을 위한 문자열 포맷
+                    string msg = string.Format("|n<color=#00ff00>{0}<|color> is killed by <color =#ff0000>{1}<|color>", photonView.Owner.NickName, lastShootPlayer.NickName);
+                    photonView.RPC("KillMesseage", RpcTarget.AllBufferedViaServer, msg);
+                }
                 StartCoroutine(PlayerDie());
             }
         }
     }
-
+    [PunRPC]
+    void KillMessage(string msg)
+    {
+        gameManager.msgList.text += msg;
+    }
     IEnumerator PlayerDie()
     {
         // CharacterController 컴포넌트 비활성화
